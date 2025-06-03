@@ -1902,7 +1902,7 @@ class EngineAdapter:
                   SELECT each source column except unique keys and when_matched_exclude
                   )
             THEN  UPDATE
-            SET   target columns to the source columns, skipping the unique keys, to prevent deferred updates 
+            SET   target columns to the source columns, skipping the unique keys, to prevent deferred updates
             WHEN  NOT MATCHED
             THEN  INSERT
 
@@ -1917,29 +1917,35 @@ class EngineAdapter:
             is a clustered index on those columns it will trigger an internal deferred update; e.g. a delete
             and insert of the row, which can be less efficient than attempting to update the row in-place.
             """
+            match_expressions = []
             unique_key_names = [y.name for y in unique_key]
             exclude_column_names = []
+
             if when_matched_exclude:
                 exclude_column_names = [y.name for y in when_matched_exclude]
+
             target_columns = [exp.column(c, MERGE_TARGET_ALIAS) for c in columns_to_types if c not in unique_key_names and c not in exclude_column_names]
-            source_columns = [exp.column(c, MERGE_SOURCE_ALIAS) for c in columns_to_types if c not in unique_key_names and c not in exclude_column_names]
-            condition = exp.Exists(this = exp.select(*target_columns).except_(exp.select(*source_columns)))
-            
-            match_expressions = [
-                exp.When(
-                    matched=True,
-                    source=False,
-                    condition=condition,
-                    then=exp.Update(
-                        expressions=[
-                            exp.column(col, MERGE_TARGET_ALIAS).eq(
-                                exp.column(col, MERGE_SOURCE_ALIAS)
-                            )
-                            for col in columns_to_types if col not in unique_key_names
-                        ],
-                    ),
-                )
-            ]
+
+            # If there are only key columns, then we don't need a WHEN MATCHED THEN UPDATE, and we definitely don't want a WHEN MATCHED AND EXISTS (EXCEPT)
+            if target_columns:
+                source_columns = [exp.column(c, MERGE_SOURCE_ALIAS) for c in columns_to_types if c not in unique_key_names and c not in exclude_column_names]
+                condition = exp.Exists(this = exp.select(*target_columns).except_(exp.select(*source_columns)))
+
+                match_expressions = [
+                        exp.When(
+                                matched=True,
+                                source=False,
+                                condition=condition,
+                                then=exp.Update(
+                                        expressions=[
+                                        exp.column(col, MERGE_TARGET_ALIAS).eq(
+                                                exp.column(col, MERGE_SOURCE_ALIAS)
+                                        )
+                                        for col in columns_to_types if not target_columns or col not in unique_key_names
+                                        ],
+                                ),
+                        )
+                ]
         else:
             match_expressions = when_matched.copy().expressions
 

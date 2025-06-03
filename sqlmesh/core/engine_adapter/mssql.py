@@ -178,12 +178,12 @@ class MSSQLEngineAdapter(
                 # _get_data_objects is catalog-specific, so these can't accidentally drop view/tables in another catalog
                 if obj.type == DataObjectType.VIEW:
                     self.drop_view(
-                        ".".join([obj.schema_name, obj.name]),
+                        exp.to_table(sql_path=exp.to_identifier(obj.name).sql(), db=exp.to_identifier(obj.schema_name).sql()),
                         ignore_if_not_exists=ignore_if_not_exists,
                     )
                 else:
                     self.drop_table(
-                        ".".join([obj.schema_name, obj.name]),
+                        exp.to_table(sql_path=exp.to_identifier(obj.name).sql(), db=exp.to_identifier(obj.schema_name).sql()),
                         exists=ignore_if_not_exists,
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
